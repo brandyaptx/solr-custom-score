@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Created by qindongliang on 2016/5/11.
  * solrconfig.xml里面配置示例
  <valueSourceParser name="myfunc" class="com.easy.custom.functionquery.MyValueParser" >
  <lst name="strategy">
@@ -44,6 +43,7 @@ public class MyValueParser extends ValueSourceParser {
 
     @Override
     public ValueSource parse(FunctionQParser fq) throws SyntaxError {
-        return new FunctionValueSource(maxYears,money_maxTimes,money_base,fq.parseValueSourceList());
+        return new FunctionValueSource(fq.parseValueSourceList());
     }
 }
+
