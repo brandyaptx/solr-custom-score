@@ -16,7 +16,7 @@
         <!--lucene-solr的版本号-->
         <lucene-solr.version>5.2.0</lucene-solr.version>
         <!--httpclient的版本号-->
-        <httpclient.version>4.4.2</httpclient.version>
+        <httpclient.version>4.4.1</httpclient.version>
 
 
 
