@@ -26,7 +26,7 @@ public class ScoreTools {
         DateTime now=new DateTime();
         DateTime varTime=new DateTime(year,month,day,hour,0,0);
         int between= Hours.hoursBetween(varTime,now).getHours();
-        float score=24/between;
+        float score= (float) Math.pow((1.0f/(float)(between+1)),0.1);
 //        return score*1.5f;
 
         return score;
