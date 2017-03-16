@@ -1,3 +1,5 @@
+package com.easy.custom.tools;
+
 import org.ahocorasick.trie.Trie;
 
 import java.io.*;
@@ -10,7 +12,7 @@ import java.util.LinkedList;
 public class Trietest {
     public static void main(String[] args) throws IOException {
         BufferedReader br;
-        br = new BufferedReader(new InputStreamReader(new FileInputStream("E:\\eclipse\\workspace\\actest\\src\\main\\resources\\dictionary.txt")));
+        br = new BufferedReader(new InputStreamReader(new FileInputStream("D:\\solr-custom-score-master\\resource\\dictionary.txt")));
         String line;
 
 
