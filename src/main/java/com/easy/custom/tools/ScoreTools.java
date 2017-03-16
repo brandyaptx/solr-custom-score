@@ -31,16 +31,15 @@ public class ScoreTools {
             }
         }
     }
-    public static float getTimeScore(long time) {
-        if (time == 0) {//没有日期的数据，不做加权操作
+    public static float getTimeScore(String time_str) {
+        if (time_str == "") {//没有日期的数据，不做加权操作
             return 0.8f;
         }
-        int year = (int) (time / 1000000);
-        int tmp = (int) (time % 1000000);
-        int month = tmp / 10000;
-        tmp = tmp % 10000;
-        int day = tmp / 100;
-        int hour = (int) (time % 100);
+
+        int year = Integer.parseInt(time_str.substring(0,4));
+        int month = Integer.parseInt(time_str.substring(4,6));
+        int day = Integer.parseInt(time_str.substring(6,8));
+        int hour = Integer.parseInt(time_str.substring(8,10));
         DateTime now = new DateTime();
         DateTime varTime = new DateTime(year, month, day, hour, 0, 0);
         int between = Hours.hoursBetween(varTime, now).getHours();
