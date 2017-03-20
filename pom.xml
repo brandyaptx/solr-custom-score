@@ -45,6 +45,11 @@
             <artifactId>httpclient</artifactId>
             <version>${httpclient.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.ahocorasick</groupId>
+            <artifactId>ahocorasick</artifactId>
+            <version>0.3.1</version>
+        </dependency>
 
         <!-- http://mvnrepository.com/artifact/joda-time/joda-time -->
 
