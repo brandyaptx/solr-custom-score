@@ -27,18 +27,14 @@ public class MyValueParser extends ValueSourceParser {
     final static Logger log= LoggerFactory.getLogger(MyValueParser.class);
 
     //接受传过来的参数
-    private int maxYears;
-    private int money_maxTimes;
-    private int money_base;
+
 
     // handle configuration parameters
     // passed through solrconfig.xml
     public void init(NamedList args) {
-        //得到一个映射之后，转成NamedList便于操作
-        maxYears=(Integer) ((NamedList)args.get("strategy")).get("maxYears");
-        money_maxTimes=(Integer) ((NamedList)args.get("strategy")).get("money_maxTimes");
-        money_base=(Integer) ((NamedList)args.get("strategy")).get("money_base");
-        log.info("初始化加权因子参数：  maxYears:{} money_maxTimes:{}  money_base:{} ",maxYears,money_maxTimes,money_base);
+        //得到一个映射之后，转成NamedList便于操作，用于solrconfig.xml读取配置项
+
+//        log.info("初始化加权因子参数：  maxYears:{} money_maxTimes:{}  money_base:{} ",maxYears,money_maxTimes,money_base);
     }
 
     @Override
