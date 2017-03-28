@@ -11,17 +11,21 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.DisMaxParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.TextField;
 import org.apache.solr.search.DisMaxQParser;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.util.SolrPluginUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Customized solr QParser of the plugin
- *
- * @author shirdrn 2011/11/03
- */
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+
 public class SimpleQParser extends DisMaxQParser {
     private final Logger LOG = LoggerFactory.getLogger(SimpleQParser.class);
     // using low level Term query? For internal search usage.
@@ -31,6 +35,7 @@ public class SimpleQParser extends DisMaxQParser {
     private static Float frontBoost = 1.0f;
     private static Float rearBoost = 1.0f;
     private String userQuery = "";
+    final IndexSchema schema = req.getSchema();
 
     public SimpleQParser(String qstr, SolrParams localParams,
                          SolrParams params, SolrQueryRequest req) {
@@ -38,6 +43,7 @@ public class SimpleQParser extends DisMaxQParser {
     }
 
     @Override
+
     public Query parse() throws SyntaxError {
         SolrParams solrParams = SolrParams.wrapDefaults(this.localParams, this.params);
         queryFields = SolrPluginUtils.parseFieldBoosts(solrParams.getParams(DisMaxParams.QF));
@@ -99,7 +105,7 @@ public class SimpleQParser extends DisMaxQParser {
             BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
             query.add(rewritedQuery, BooleanClause.Occur.MUST);
         }
-        return false;
+        return true;
     }
 
     protected void rewriteAndOrQuery(String userQuery, BooleanQuery.Builder query, SolrParams solrParams)throws SyntaxError {
@@ -210,13 +216,13 @@ public class SimpleQParser extends DisMaxQParser {
             for(BooleanClause clause : bq.clauses()) {
                 if(clause.getQuery() instanceof DisjunctionMaxQuery) {
                     BooleanClause.Occur occur = clause.getOccur();
-//                    output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) clause.getQuery()), occur); // BooleanClause.Occur.SHOULD
+                     output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) clause.getQuery()), occur); // BooleanClause.Occur.SHOULD
                 } else {
                     output.add(clause.getQuery(), clause.getOccur());
                 }
             }
         } else if(input instanceof DisjunctionMaxQuery) {
-//            output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) input), BooleanClause.Occur.SHOULD); // BooleanClause.Occur.SHOULD
+             output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) input), BooleanClause.Occur.SHOULD); // BooleanClause.Occur.SHOULD
         }
         output.setBoost(input.getBoost()); // boost main clause
         return output;
@@ -228,44 +234,48 @@ public class SimpleQParser extends DisMaxQParser {
      * @param input
      * @return
      */
-//    private BooleanQuery rewriteDisjunctionMaxQueries(DisjunctionMaxQuery input) {
-//        // input e.g. (content:"吉林 长白山 内蒙古 九寨沟" | title:"吉林 长白山 内蒙古 九寨沟"^1.5)~1.0
-//        Map<String, BooleanQuery> m = new HashMap<String, BooleanQuery>();
-//        Iterator<Query> iter = input.iterator();
-//        while (iter.hasNext()) {
-//            Query query = iter.next();
-//            if(query instanceof PhraseQuery) {
-//                PhraseQuery pq = (PhraseQuery) query; // e.g. content:"吉林 长白山 内蒙古 九寨沟"
-//                for(Term term : pq.getTerms()) {
-//                    BooleanQuery fieldsQuery = m.get(term.text());
-//                    if(fieldsQuery==null) {
-//                        fieldsQuery = new BooleanQuery(true);
-//                        m.put(term.text(), fieldsQuery);
-//                    }
-//                    fieldsQuery.setBoost(pq.getBoost());
-//                    fieldsQuery.add(new TermQuery(term), BooleanClause.Occur.SHOULD);
-//                }
-//            } else if(query instanceof TermQuery) {
-//                TermQuery termQuery = (TermQuery) query;
-//                BooleanQuery fieldsQuery = m.get(termQuery.getTerm().text());
-//                if(fieldsQuery==null) {
-//                    fieldsQuery = new BooleanQuery(true);
-//                    m.put(termQuery.getTerm().text(), fieldsQuery);
-//                }
-//                fieldsQuery.setBoost(termQuery.getBoost());
-//                fieldsQuery.add(termQuery, BooleanClause.Occur.SHOULD);
-//            }
-//        }
-//
-//        Iterator<Entry<String, BooleanQuery>> it = m.entrySet().iterator();
-//        BooleanQuery mustBooleanQuery = new BooleanQuery(true);
-//        while(it.hasNext()) {
-//            Entry<String, BooleanQuery> entry = it.next();
-//            BooleanQuery shouldBooleanQuery = new BooleanQuery(true);
-//            createTermQuery(shouldBooleanQuery, entry.getKey());
-//            mustBooleanQuery.add(shouldBooleanQuery, BooleanClause.Occur.MUST);
-//        }
-//        return mustBooleanQuery;
-//    }
+    private BooleanQuery rewriteDisjunctionMaxQueries(DisjunctionMaxQuery input) {
+        // input e.g. (content:"吉林 长白山 内蒙古 九寨沟" | title:"吉林 长白山 内蒙古 九寨沟"^1.5)~1.0
+        Map<String, BooleanQuery> m = new HashMap<String, BooleanQuery>();
+        Analyzer analyzer = req.getSchema().getQueryAnalyzer();
+        Iterator<Query> iter = input.iterator();
+        while (iter.hasNext()) {
+            Query query = iter.next();
+            if(query instanceof PhraseQuery) {
+                PhraseQuery pq = (PhraseQuery) query; // e.g. content:"吉林 长白山 内蒙古 九寨沟"
+                for(Term term : pq.getTerms()) {
+                    ///加入分词模块，构造term(field, text)
+                    String terms = TextField.analyzeMultiTerm(term.field(), term.text(), analyzer).utf8ToString();
+                    LOG.debug("preprocessdquery = " + terms);
+                    BooleanQuery fieldsQuery = m.get(terms);
+                    if(fieldsQuery==null) {
+                        fieldsQuery = new BooleanQuery(true);
+                        m.put(term.text(), fieldsQuery);
+                    }
+                    fieldsQuery.setBoost(pq.getBoost());
+                    fieldsQuery.add(new TermQuery(term), BooleanClause.Occur.SHOULD);
+                }
+            } else if(query instanceof TermQuery) {
+                TermQuery termQuery = (TermQuery) query;
+                BooleanQuery fieldsQuery = m.get(termQuery.getTerm().text());
+                if(fieldsQuery==null) {
+                    fieldsQuery = new BooleanQuery(true);
+                    m.put(termQuery.getTerm().text(), fieldsQuery);
+                }
+                fieldsQuery.setBoost(termQuery.getBoost());
+                fieldsQuery.add(termQuery, BooleanClause.Occur.SHOULD);
+            }
+        }
+
+        Iterator<Map.Entry<String, BooleanQuery>> it = m.entrySet().iterator();
+        BooleanQuery mustBooleanQuery = new BooleanQuery(true);
+        while(it.hasNext()) {
+            Map.Entry<String, BooleanQuery> entry = it.next();
+            BooleanQuery shouldBooleanQuery = new BooleanQuery(true);
+            createTermQuery(shouldBooleanQuery, entry.getKey());
+            mustBooleanQuery.add(shouldBooleanQuery, BooleanClause.Occur.MUST);
+        }
+        return mustBooleanQuery;
+    }
 
 }
