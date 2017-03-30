@@ -11,15 +11,11 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.DisMaxParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.solr.schema.IndexSchema;
-import org.apache.solr.schema.TextField;
 import org.apache.solr.search.DisMaxQParser;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.util.SolrPluginUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -30,12 +26,12 @@ public class SimpleQParser extends DisMaxQParser {
     private final Logger LOG = LoggerFactory.getLogger(SimpleQParser.class);
     // using low level Term query? For internal search usage.
     private boolean useLowLevelTermQuery = false;
-    private float tiebreaker = 0f;
+    private float tiebreaker = 1f;
     private static Float mainBoost = 1.0f;
     private static Float frontBoost = 1.0f;
     private static Float rearBoost = 1.0f;
     private String userQuery = "";
-    final IndexSchema schema = req.getSchema();
+//    final IndexSchema schema = req.getSchema();
 
     public SimpleQParser(String qstr, SolrParams localParams,
                          SolrParams params, SolrQueryRequest req) {
@@ -100,6 +96,8 @@ public class SimpleQParser extends DisMaxQParser {
             }
 
             LOG.debug("userQuery=" + luceneQueryText);
+            ///在这之前加入分词模块也可以简单实用dismax代码解决问题
+            // todo
             parsedUserQuery = getUserQuery(luceneQueryText, up, solrParams);
 
             BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
@@ -235,44 +233,56 @@ public class SimpleQParser extends DisMaxQParser {
      * @return
      */
     private BooleanQuery rewriteDisjunctionMaxQueries(DisjunctionMaxQuery input) {
-        // input e.g. (content:"吉林 长白山 内蒙古 九寨沟" | title:"吉林 长白山 内蒙古 九寨沟"^1.5)~1.0
+        // input e.g. (content:"吉林" content:"长白山" ） | （title:"吉林"^1.5 title:"长白山"^1.5 )
         Map<String, BooleanQuery> m = new HashMap<String, BooleanQuery>();
-        Analyzer analyzer = req.getSchema().getQueryAnalyzer();
+//        Analyzer analyzer = req.getSchema().getQueryAnalyzer();
         Iterator<Query> iter = input.iterator();
         while (iter.hasNext()) {
             Query query = iter.next();
-            if(query instanceof PhraseQuery) {
-                PhraseQuery pq = (PhraseQuery) query; // e.g. content:"吉林 长白山 内蒙古 九寨沟"
-                for(Term term : pq.getTerms()) {
-                    ///加入分词模块，构造term(field, text)
-                    String terms = TextField.analyzeMultiTerm(term.field(), term.text(), analyzer).utf8ToString();
-                    LOG.debug("preprocessdquery = " + terms);
-                    BooleanQuery fieldsQuery = m.get(terms);
-                    if(fieldsQuery==null) {
-                        fieldsQuery = new BooleanQuery(true);
-                        m.put(term.text(), fieldsQuery);
+            if (query instanceof BoostQuery) {
+                query = ((BoostQuery) query).getQuery();
+            }
+            if (query instanceof BooleanQuery) {
+                BooleanQuery bq = (BooleanQuery) query;
+                for (BooleanClause clause : bq.clauses()) {
+                    Query subquery = clause.getQuery();
+                    LOG.debug("subquery = " + subquery.toString());
+                    LOG.debug("subquery type= " + subquery.getClass().getName());
+                    if (subquery instanceof PhraseQuery) {
+                        PhraseQuery pq = (PhraseQuery) subquery; // e.g. content:"吉林 长春"
+                        for (Term term : pq.getTerms()) {
+                            ///加入分词模块，构造term(field, text)
+//                    String terms = TextField.analyzeMultiTerm(term.field(), term.text(), analyzer).utf8ToString();
+
+                            BooleanQuery fieldsQuery = m.get(term.text());
+                            if (fieldsQuery == null) {
+                                fieldsQuery = new BooleanQuery(true);
+                                m.put(term.text(), fieldsQuery);//这里存储的fieldsQuery作用是为了让设置里的minboost生效
+                            }
+                            fieldsQuery.setBoost(pq.getBoost());
+                            fieldsQuery.add(new TermQuery(term), BooleanClause.Occur.SHOULD);
+                        }
+                    } else if (subquery instanceof TermQuery) {
+                        TermQuery termQuery = (TermQuery) subquery;
+                        BooleanQuery fieldsQuery = m.get(termQuery.getTerm().text());
+                        if (fieldsQuery == null) {
+                            fieldsQuery = new BooleanQuery(true);
+                            m.put(termQuery.getTerm().text(), fieldsQuery);
+                        }
+                        fieldsQuery.setBoost(termQuery.getBoost());
+                        fieldsQuery.add(termQuery, BooleanClause.Occur.SHOULD);
                     }
-                    fieldsQuery.setBoost(pq.getBoost());
-                    fieldsQuery.add(new TermQuery(term), BooleanClause.Occur.SHOULD);
                 }
-            } else if(query instanceof TermQuery) {
-                TermQuery termQuery = (TermQuery) query;
-                BooleanQuery fieldsQuery = m.get(termQuery.getTerm().text());
-                if(fieldsQuery==null) {
-                    fieldsQuery = new BooleanQuery(true);
-                    m.put(termQuery.getTerm().text(), fieldsQuery);
-                }
-                fieldsQuery.setBoost(termQuery.getBoost());
-                fieldsQuery.add(termQuery, BooleanClause.Occur.SHOULD);
+
             }
         }
 
         Iterator<Map.Entry<String, BooleanQuery>> it = m.entrySet().iterator();
         BooleanQuery mustBooleanQuery = new BooleanQuery(true);
-        while(it.hasNext()) {
+        while (it.hasNext()) {
             Map.Entry<String, BooleanQuery> entry = it.next();
             BooleanQuery shouldBooleanQuery = new BooleanQuery(true);
-            createTermQuery(shouldBooleanQuery, entry.getKey());
+            createTermQuery(shouldBooleanQuery, entry.getKey());//构造形如（title:武汉 context:武汉）的子查询
             mustBooleanQuery.add(shouldBooleanQuery, BooleanClause.Occur.MUST);
         }
         return mustBooleanQuery;
