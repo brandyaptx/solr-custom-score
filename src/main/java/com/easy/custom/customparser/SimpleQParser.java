@@ -7,7 +7,6 @@ package com.easy.custom.customparser;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.search.*;
-import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.DisMaxParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.request.SolrQueryRequest;
@@ -88,12 +87,12 @@ public class SimpleQParser extends DisMaxQParser {
             // use low level Term for constructing TermQuery or BooleanQuery.
             // warning: for internal AND, OR query, in order to integrate with Solr for obtaining highlight
             String luceneQueryText = userQuery;
-            String q = solrParams.get(CommonParams.Q);
-            if(q!=null && (q.indexOf("AND")!=-1 || q.indexOf("OR")!=-1)) {
-                addBasicAndOrQuery(luceneQueryText, query, solrParams);
-                luceneQueryText = query.toString();
-                useLowLevelTermQuery = true;
-            }
+//            String q = solrParams.get(CommonParams.Q);
+//            if(q!=null && (q.indexOf("AND")!=-1 || q.indexOf("OR")!=-1)) {
+//                addBasicAndOrQuery(luceneQueryText, query, solrParams);
+//                luceneQueryText = query.toString();
+//                useLowLevelTermQuery = true;
+//            }
 
             LOG.debug("userQuery=" + luceneQueryText);
             ///在这之前加入分词模块也可以简单实用dismax代码解决问题
