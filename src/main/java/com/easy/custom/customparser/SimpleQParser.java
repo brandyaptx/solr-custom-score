@@ -4,6 +4,7 @@ package com.easy.custom.customparser;
  * Created by Administrator on 2017/3/24 0024.
  */
 
+import org.apache.commons.logging.Log;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.search.*;
@@ -86,7 +87,7 @@ public class SimpleQParser extends DisMaxQParser {
 
             // use low level Term for constructing TermQuery or BooleanQuery.
             // warning: for internal AND, OR query, in order to integrate with Solr for obtaining highlight
-            String luceneQueryText = userQuery;
+//            String luceneQueryText = userQuery;
 //            String q = solrParams.get(CommonParams.Q);
 //            if(q!=null && (q.indexOf("AND")!=-1 || q.indexOf("OR")!=-1)) {
 //                addBasicAndOrQuery(luceneQueryText, query, solrParams);
@@ -94,13 +95,16 @@ public class SimpleQParser extends DisMaxQParser {
 //                useLowLevelTermQuery = true;
 //            }
 
-            LOG.debug("userQuery=" + luceneQueryText);
+            LOG.error("userQuery=" + userQuery);
             ///在这之前加入分词模块也可以简单实用dismax代码解决问题
             // todo
-            parsedUserQuery = getUserQuery(luceneQueryText, up, solrParams);
-
+            parsedUserQuery = getUserQuery(userQuery, up, solrParams);
+            LOG.error("parsedUserQuery = " ,parsedUserQuery.toString());
+            LOG.error("parsedUserQuery = ",parsedUserQuery.getClass().getName());
             BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
-            query.add(rewritedQuery, BooleanClause.Occur.MUST);
+            if (null != rewritedQuery) {
+                query.add(rewritedQuery, BooleanClause.Occur.MUST);
+            }
         }
         return true;
     }
@@ -213,13 +217,13 @@ public class SimpleQParser extends DisMaxQParser {
             for(BooleanClause clause : bq.clauses()) {
                 if(clause.getQuery() instanceof DisjunctionMaxQuery) {
                     BooleanClause.Occur occur = clause.getOccur();
-                     output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) clause.getQuery()), occur); // BooleanClause.Occur.SHOULD
+                    output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) clause.getQuery()), occur); // BooleanClause.Occur.SHOULD
                 } else {
                     output.add(clause.getQuery(), clause.getOccur());
                 }
             }
         } else if(input instanceof DisjunctionMaxQuery) {
-             output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) input), BooleanClause.Occur.SHOULD); // BooleanClause.Occur.SHOULD
+            output.add(rewriteDisjunctionMaxQueries((DisjunctionMaxQuery) input), BooleanClause.Occur.SHOULD); // BooleanClause.Occur.SHOULD
         }
         output.setBoost(input.getBoost()); // boost main clause
         return output;
@@ -238,6 +242,8 @@ public class SimpleQParser extends DisMaxQParser {
         Iterator<Query> iter = input.iterator();
         while (iter.hasNext()) {
             Query query = iter.next();
+            LOG.error("query = " ,query.toString());
+            LOG.error("querytype = ",query.getClass().getName());
             if (query instanceof BoostQuery) {
                 query = ((BoostQuery) query).getQuery();
             }
