@@ -34,16 +34,19 @@ public class FunctionValueSource extends ValueSource {
 
         final FunctionValues hour =this.valueSources.get(0).getValues(map,leafReaderContext);
         final FunctionValues url=this.valueSources.get(1).getValues(map,leafReaderContext);
+        final FunctionValues senti=this.valueSources.get(2).getValues(map,leafReaderContext);
 //        final NumericDocValues numericDocValues = DocValues.getNumeric(leafReaderContext.reader(), field);
         return new FloatDocValues(this) {
             @Override
             public float floatVal(int i) {
                 String time = hour.strVal(i);
                 String site_url=url.strVal(i);
+                String senti_score=senti.strVal(i);
+                float sentiscore = ScoreTools.getSentimentScore(senti_score);
                 float timesocre = ScoreTools.getTimeScore(time);
                 float sitesocre = ScoreTools.getSiteScore(site_url);
 
-                return timesocre*sitesocre;
+                return timesocre*sitesocre*sentiscore;
             }
         };
     }

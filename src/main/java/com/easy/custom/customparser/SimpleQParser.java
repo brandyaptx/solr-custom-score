@@ -4,7 +4,7 @@ package com.easy.custom.customparser;
  * Created by Administrator on 2017/3/24 0024.
  */
 
-import org.apache.commons.logging.Log;
+
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.search.*;
@@ -14,22 +14,14 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.DisMaxQParser;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.util.SolrPluginUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 
 public class SimpleQParser extends DisMaxQParser {
-    private final Logger LOG = LoggerFactory.getLogger(SimpleQParser.class);
     // using low level Term query? For internal search usage.
-    private boolean useLowLevelTermQuery = false;
-    private float tiebreaker = 1f;
-    private static Float mainBoost = 1.0f;
-    private static Float frontBoost = 1.0f;
-    private static Float rearBoost = 1.0f;
+    private float tiebreaker = 0f;
     private String userQuery = "";
 //    final IndexSchema schema = req.getSchema();
 
@@ -53,10 +45,10 @@ public class SimpleQParser extends DisMaxQParser {
         BooleanQuery.Builder query = new BooleanQuery.Builder();
         addMainQuery(query, solrParams);
         // rewrite q parameter for highlighting
-        if(useLowLevelTermQuery) {
-            query = new BooleanQuery.Builder();
-            rewriteAndOrQuery(userQuery, query, solrParams);
-        }
+//        if(useLowLevelTermQuery) {
+//            query = new BooleanQuery.Builder();
+//            rewriteAndOrQuery(userQuery, query, solrParams);
+//        }
         addBoostQuery(query, solrParams);
         addBoostFunctions(query, solrParams);
         return query.build();
@@ -70,7 +62,7 @@ public class SimpleQParser extends DisMaxQParser {
          * a parser for dealing with user input, which will convert things to
          * DisjunctionMaxQueries
          */
-        SolrPluginUtils.DisjunctionMaxQueryParser up = getParser(queryFields,DisMaxParams.QS, solrParams, tiebreaker);
+        SolrPluginUtils.DisjunctionMaxQueryParser up = getParser(queryFields, DisMaxParams.QS, solrParams, tiebreaker);
 
         /* * * Main User Query * * */
         parsedUserQuery = null;
@@ -87,20 +79,16 @@ public class SimpleQParser extends DisMaxQParser {
 
             // use low level Term for constructing TermQuery or BooleanQuery.
             // warning: for internal AND, OR query, in order to integrate with Solr for obtaining highlight
-//            String luceneQueryText = userQuery;
+            String luceneQueryText = userQuery;
 //            String q = solrParams.get(CommonParams.Q);
-//            if(q!=null && (q.indexOf("AND")!=-1 || q.indexOf("OR")!=-1)) {
-//                addBasicAndOrQuery(luceneQueryText, query, solrParams);
-//                luceneQueryText = query.toString();
-//                useLowLevelTermQuery = true;
-//            }
+            if(userQuery!=null && (userQuery.indexOf("AND")!=-1 || userQuery.indexOf("OR")!=-1)) {
+                addBasicAndOrQuery(luceneQueryText, query, up,solrParams);
+                return true;
+            }
 
-            LOG.error("userQuery=" + userQuery);
             ///在这之前加入分词模块也可以简单实用dismax代码解决问题
-            // todo
-            parsedUserQuery = getUserQuery(userQuery, up, solrParams);
-            LOG.error("parsedUserQuery = " ,parsedUserQuery.toString());
-            LOG.error("parsedUserQuery = ",parsedUserQuery.getClass().getName());
+
+            parsedUserQuery = getUserQuery(luceneQueryText, up, solrParams);
             BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
             if (null != rewritedQuery) {
                 query.add(rewritedQuery, BooleanClause.Occur.MUST);
@@ -109,9 +97,9 @@ public class SimpleQParser extends DisMaxQParser {
         return true;
     }
 
-    protected void rewriteAndOrQuery(String userQuery, BooleanQuery.Builder query, SolrParams solrParams)throws SyntaxError {
-        addBasicAndOrQuery(userQuery, query, solrParams);
-    }
+//    protected void rewriteAndOrQuery(String userQuery, BooleanQuery.Builder query, SolrParams solrParams)throws SyntaxError {
+//        addBasicAndOrQuery(userQuery, query, solrParams);
+//    }
 
     /**
      * Parse mixing MUST and SHOULD query defined by us,
@@ -121,10 +109,9 @@ public class SimpleQParser extends DisMaxQParser {
      * @param solrParams
      * @throws ParseException
      */
-    protected void addBasicAndOrQuery(String userQuery, BooleanQuery.Builder query, SolrParams solrParams)throws SyntaxError {
+    protected void addBasicAndOrQuery(String userQuery, BooleanQuery.Builder query, SolrPluginUtils.DisjunctionMaxQueryParser up, SolrParams solrParams)throws SyntaxError {
         userQuery = SolrPluginUtils.partialEscape(SolrPluginUtils.stripUnbalancedQuotes(userQuery)).toString();
         userQuery = SolrPluginUtils.stripIllegalOperators(userQuery).toString();
-        LOG.debug("userQuery=" + userQuery);
         BooleanQuery parsedUserQuery = new BooleanQuery(true);
         String[] a = userQuery.split("\\s*AND\\s*");
         String q = "";
@@ -132,42 +119,41 @@ public class SimpleQParser extends DisMaxQParser {
             createTermQuery(parsedUserQuery, userQuery);
         } if(a.length>=3) {
             if(userQuery.indexOf("OR")==-1) { // e.g. 首都AND北京AND北平
-                BooleanQuery andBooleanQuery = parseAndQuery(a);
+                BooleanQuery andBooleanQuery = parseAndQuery(a,up,solrParams);
                 parsedUserQuery.add(andBooleanQuery, BooleanClause.Occur.MUST);
             }
         } else{
             if(a.length>0) {
                 q = a[0].trim();
                 if(q.indexOf("OR")!=-1 || q.length()>0) {
-                    parsedUserQuery.add(parseOrQuery(q, frontBoost), BooleanClause.Occur.MUST);
+                    parsedUserQuery.add(parseOrQuery(q, up,solrParams), BooleanClause.Occur.MUST);
                 }
             }
             if(a.length==2) {
                 q = a[1].trim();
                 if(q.indexOf("OR")!=-1 || q.length()>0) {
-                    parsedUserQuery.add(parseOrQuery(q, rearBoost), BooleanClause.Occur.MUST);
+                    parsedUserQuery.add(parseOrQuery(q, up,solrParams), BooleanClause.Occur.MUST);
                 }
             }
         }
-        parsedUserQuery.setBoost(mainBoost);
-        BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
-        query.add(rewritedQuery, BooleanClause.Occur.MUST);
+//        BooleanQuery rewritedQuery = rewriteQueries(parsedUserQuery);
+        query.add(parsedUserQuery, BooleanClause.Occur.MUST);
     }
 
     /**
      * Parse SHOULD query, e.g. 北京OR北平OR首都
      * @param ors
-     * @param boost
      * @return
      */
-    private BooleanQuery parseOrQuery(String ors, Float boost) {
+    private BooleanQuery parseOrQuery(String ors, SolrPluginUtils.DisjunctionMaxQueryParser up, SolrParams solrParams) throws SyntaxError {
         BooleanQuery bq = new BooleanQuery(true);
         for(String or : ors.split("\\s*OR\\s*")) {
             if(!or.isEmpty()) {
-                createTermQuery(bq, or.trim());
+                Query part = getUserQuery(or, up, solrParams);
+                bq.add(rewriteQueries(part),BooleanClause.Occur.SHOULD);
+//                createTermQuery(bq, or.trim());
             }
         }
-        bq.setBoost(boost);
         return bq;
     }
 
@@ -191,13 +177,12 @@ public class SimpleQParser extends DisMaxQParser {
      * @param ands
      * @return
      */
-    private BooleanQuery parseAndQuery(String[] ands) {
+    private BooleanQuery parseAndQuery(String[] ands, SolrPluginUtils.DisjunctionMaxQueryParser up, SolrParams solrParams) throws SyntaxError {
         BooleanQuery andBooleanQuery = new BooleanQuery(true);
         for(String and : ands) {
             if(!and.isEmpty()) {
-                BooleanQuery bq = new BooleanQuery(true);
-                createTermQuery(bq, and);
-                andBooleanQuery.add(bq, BooleanClause.Occur.MUST);
+                Query bq = getUserQuery(and, up, solrParams);
+                andBooleanQuery.add(rewriteQueries(bq),BooleanClause.Occur.MUST);
             }
         }
         return andBooleanQuery;
@@ -239,20 +224,22 @@ public class SimpleQParser extends DisMaxQParser {
         // input e.g. (content:"吉林" content:"长白山" ） | （title:"吉林"^1.5 title:"长白山"^1.5 )
         Map<String, BooleanQuery> m = new HashMap<String, BooleanQuery>();
 //        Analyzer analyzer = req.getSchema().getQueryAnalyzer();
-        Iterator<Query> iter = input.iterator();
-        while (iter.hasNext()) {
-            Query query = iter.next();
-            LOG.error("query = " ,query.toString());
-            LOG.error("querytype = ",query.getClass().getName());
+        for (Query query : input) {
             if (query instanceof BoostQuery) {
                 query = ((BoostQuery) query).getQuery();
+            }
+            if (query instanceof TermQuery) {
+                TermQuery termQuery = (TermQuery) query;
+                BooleanQuery fieldsQuery = m.get(termQuery.getTerm().text());
+                if (fieldsQuery == null) {
+                    fieldsQuery = new BooleanQuery(true);
+                    m.put(termQuery.getTerm().text(), fieldsQuery);
+                }
             }
             if (query instanceof BooleanQuery) {
                 BooleanQuery bq = (BooleanQuery) query;
                 for (BooleanClause clause : bq.clauses()) {
                     Query subquery = clause.getQuery();
-                    LOG.debug("subquery = " + subquery.toString());
-                    LOG.debug("subquery type= " + subquery.getClass().getName());
                     if (subquery instanceof PhraseQuery) {
                         PhraseQuery pq = (PhraseQuery) subquery; // e.g. content:"吉林 长春"
                         for (Term term : pq.getTerms()) {
@@ -280,6 +267,7 @@ public class SimpleQParser extends DisMaxQParser {
                 }
 
             }
+
         }
 
         Iterator<Map.Entry<String, BooleanQuery>> it = m.entrySet().iterator();

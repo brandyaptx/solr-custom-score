@@ -43,6 +43,7 @@ public class ScoreTools {
         DateTime now = new DateTime();
         DateTime varTime = new DateTime(year, month, day, hour, 0, 0);
         int between = Hours.hoursBetween(varTime, now).getHours();
+        between = between>0?between:0;
         float score = (float) Math.pow((1.0f / (float) (between + 1)), 0.1);
 //        return score*1.5f;
         return score;
@@ -56,6 +57,19 @@ public class ScoreTools {
             return 0.8f;
         else
             return 1.0f;
+    }
+    private static float sigmoid(float x) {
+
+        return 1.0f / (1.0f + 1.0f * (float)Math.exp(Math.abs(x)));
+    }
+
+    public static float getSentimentScore(String score) {
+        if(score == null) {//没有url的数据，不做加权操作
+            return 0.8f;
+        }
+
+        return sigmoid(Float.parseFloat(score));
+
     }
 }
 
